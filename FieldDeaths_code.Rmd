@@ -1,0 +1,424 @@
+---
+title: "Deaths in the field"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r setup, include=FALSE}
+
+#######TO RUN: 
+#######Just press the "Knit" button to generate a PDF with all needed plots 
+
+#rm(list=ls()) #nuke environment option 
+
+knitr::opts_chunk$set(echo = TRUE)
+
+#Load the relevant libraries 
+library("grid")
+library("gridExtra")
+library("ggplot2")
+library("gdata")
+library("dplyr")
+library('forcats')
+library('tinytex')
+library('here')
+library(EnvStats)
+library('RColorBrewer')
+library(gtable)
+library(cowplot)
+
+# Colorblind palette with grey:
+cbPalette <- c("#E69F00", "#56B4E9", "#F0E442", "#009E73","#0072B2", "#D55E00", "#CC79A7", "#999999", "burlywood4", '#222222')
+
+
+#Set working directory
+here()
+
+```
+
+```{r Import and subset database, echo = FALSE}
+
+# Import database 
+Db <- read.xls('FieldDeaths_20200907.xlsx',  skip = 0) # Import database 
+Db <- Db[,1:20] #trim to just active columns
+
+# give columns short names 
+names(Db) <- c("number", "name", "gender", "field", "stage.or.age", "sector", "short.cause", "detailed.cause", "intentional", "BLS.category", "year", "country.death", "country.worked", "earth.science", "in.the.field", "rationale", "perma.cc.link", "media.category", "source.name", "student") 
+
+
+# Subset the database so that it only includes deaths that occurred during doing Earth science (earth.science == "Yes") and deaths that occurred "in the field" and not at a mine or construction site (in.the.field == "Yes")
+Db.clean <- subset(Db, Db$earth.science == "Yes" & Db$in.the.field == "Yes")
+    
+```
+```{r Pie charts, echo = FALSE}
+
+
+# Make pie chart of intentional vs. unintentional deaths 
+
+colors <- c("intentional" = 'lightsteelblue4', "unintentional" = 'lightsteelblue1', "medical" = 'lightsteelblue2')
+
+death.intentional <- Db.clean %>% 
+  group_by(intentional) %>% 
+  count()
+
+#calculate position of labels for pie chart
+death.intentional <- death.intentional %>%
+  arrange(desc(intentional)) %>%
+  mutate(prop = n / sum(death.intentional$n) *100) %>%
+  mutate(ypos = cumsum(prop)- 0.5*prop )
+death.intentional$ypos = c(32, 75, 90) #manually hard-coded for best positions
+death.intentional$source = c("this.database","this.database","this.database") #manually hard-coded for best positions
+names(death.intentional) <- c("cause", "n", "prop", "ypos", "source")
+
+#make pie chart
+Pie_intentional <- ggplot(death.intentional, aes(x="", y=prop, fill=cause)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = cause), color = "white", size=4)+
+  ggtitle('Intentional death')
+
+plot(Pie_intentional)
+
+
+## Make a pie chart of deaths by gender. 
+
+colors <- c("M" = 'darkseagreen1', "X" = 'darkseagreen3', 'F' = 'darkseagreen4')
+
+death.gender <- Db.clean %>% 
+  group_by(gender) %>% 
+  count()
+
+#calculate position of labels for pie chart
+death.gender <- death.gender %>%
+  arrange(desc(gender)) %>%
+  mutate(prop = n / sum(death.gender$n) *100) %>%
+  mutate(ypos = cumsum(prop)- 0.5*prop )
+death.gender$ypos = c(5, 50, 97) #manually hard-coded for best positions
+death.gender$source = c("this.database","this.database","this.database")
+
+#make pie chart
+Pie_gender <- ggplot(death.gender, aes(x="", y=prop, fill=gender)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = gender), color = "white", size=4)+
+  ggtitle('Gender and death')
+
+plot(Pie_gender)
+
+
+## Make a pie chart of deaths by sector 
+
+#First, let's clean up the sector column and group everything except for academia, private, and government into "other"
+Db.clean$sector.coded <- Db.clean$sector
+Db.clean$sector.coded[Db.clean$sector.coded == "Personal"] <- "Other"
+Db.clean$sector.coded[Db.clean$sector.coded == "Unknown"] <- "Other"
+Db.clean$sector.coded[Db.clean$sector.coded == "School"] <- "Other"
+Db.clean$sector.coded[Db.clean$sector.coded == "Non-profit"] <- "Other"
+
+colors <- c("Academia" = 'gray10', "Private" = 'gray32', 'Government' = 'gray73', "Other" = "gray93")
+
+death.sector <- Db.clean %>% 
+  group_by(sector.coded) %>% 
+  count()
+
+#calculate position of labels for pie chart
+death.sector <- death.sector %>%
+  arrange(desc(sector.coded)) %>%
+  mutate(prop = n / sum(death.sector$n) *100) %>%
+  mutate(ypos = cumsum(prop)- 0.5*prop )
+death.sector$ypos = c(25, 40, 65, 90) #manually hard-coded for best positions
+
+#make pie chart
+Pie_sector <- ggplot(death.sector, aes(x="", y=prop, fill=sector.coded)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = sector.coded), color = "white", size=4)+
+  ggtitle('Sector and death')
+
+plot(Pie_sector)
+
+# gender breakdown within academia, within private, within government 
+
+Db.clean.academia <- subset(Db.clean, sector.coded == "Academia")
+Db.clean.private <- subset(Db.clean, sector.coded == "Private")
+Db.clean.government <- subset(Db.clean, sector.coded == "Government")
+
+death.academia.gender <- Db.clean.academia %>% 
+  group_by(gender) %>% 
+  count()
+
+death.private.gender <- Db.clean.private %>% 
+  group_by(gender) %>% 
+  count()
+
+death.government.gender <- Db.clean.government %>% 
+  group_by(gender) %>% 
+  count()
+
+All_pies_plot <- grid.arrange(
+  grobs = list(Pie_intentional, Pie_gender, Pie_sector),
+  widths = c(1),
+  heights = c(1,1,1),
+  layout_matrix = rbind(c(1),
+                        c(2),
+                        c(3)))
+
+ggsave("Pies_plot.pdf", All_pies_plot, width = 5, height = 3.75, units = "in")
+
+# subset for unintentional deaths 
+Db.intentional <- subset(Db.clean, intentional == "intentional")
+
+death.intentional.sector <- Db.intentional %>% 
+  group_by(sector.coded) %>% 
+  count()
+
+death.intentional.gender <- Db.intentional %>% 
+  group_by(gender) %>% 
+  count()
+
+```
+
+```{r bar charts}
+
+# Sector for unintentional deaths 
+Db.unintentional <- subset(Db.clean, intentional == "unintentional")
+
+death.unintentional <- Db.unintentional %>% 
+  group_by(short.cause) %>% 
+  count()  
+
+death.unintentional$short.cause <- factor(death.unintentional$short.cause, 
+                                          levels = c("vehicle", "helicopter", "animal", "drowning", "fall", "volcanic hazard", "heat", "SCUBA", "avalanche", "electrocution", "rock fall", "heavy machinery" ))
+
+
+Unintentional_plot <- ggplot(data=death.unintentional, aes(x=short.cause, y=n)) +
+  geom_bar(stat="identity", fill="darkslateblue") +
+  geom_text(aes(label=n), vjust=-0.3, size=3.5) +
+  theme_bw()+
+  theme(aspect.ratio= 1/3,
+        text = element_text(family = "Helvetica", color = "black"),
+        panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 15)) +
+  xlab("Cause of death") +
+  ylab("Number")
+
+plot(Unintentional_plot)
+ggsave("Unintentional_plot.pdf", Unintentional_plot, width = 5, units = "in")
+
+
+```
+```{r comparison, echo = FALSE}
+
+# National Parks data 
+# From https://perma.cc/U3XX-G5GD 
+# and from https://perma.cc/UN5H-35HH -- CY2014-CY2016 Mortality Dashboard Key Statistics
+# Reported: 79% of deaths are male 
+# 53% (525) of deaths are unintentional; 22% (222) are medical; 18% (174) intentional (and of those 95% suicide); 7% (69) are undetermined 
+
+nps.data.sex <- tibble(c("male", "female", "undetermined"), c(79, 19, 2))
+names(nps.data.sex) <- c("sex", "fraction")
+
+nps.data.cause <- tibble(c("unintentional", "medical", "intentional", "undetermined"), c(53, 22, 18, 7), c(525, 222, 174, 69), c("nps","nps","nps","nps"))
+names(nps.data.cause) <- c("cause", "fraction", "n", "source")
+
+
+# BLS data 
+# From https://perma.cc/K9LZ-QTC7 -- Fatal occupational injuries by worker characteristics and event or exposure, 2019 (latest available)
+# Reported: 5,333 total deaths
+# Reported gender breakdown: 437 women; 4896 men, adds up to 5333
+# Reported causes: 2122 transportation; 841 violence and injuries from humans and animals; 732 contact with objects and equipment; 880 falls, trips, and spills; 642 exposure to harmful substances or environments; 99 fires and explosions. This does not add up to 5333--17 deaths (less than 1%) not categorized
+
+bls.data.gender <- tibble(c("man", "woman"), c( 4896/5333 * 100, 437/5333 * 100), c(4896, 437), c('bls','bls'))
+names(bls.data.gender) <- c("gender", "fraction", 'n', 'source')
+
+bls.data.cause.source <- c('bls','bls','bls','bls','bls','bls')
+bls.data.cause.n <- c(732, 880, 99, 642, 2122, 841)
+bls.data.cause.percent <- c(732/5316 * 100, 
+                      880/5316 * 100, 
+                      99/5316 * 100,
+                      642/5316 * 100,
+                      2122/5316 * 100, 
+                      841/5316 * 100)
+bls.data.cause.ypos = c(90, 60, 85, 80, 45, 10) #manually hard-coded for best positions
+bls.data.cause <- tibble(c("contact",
+                           "falls", 
+                           "explosions",
+                           "exposure",
+                           "transportation", 
+                           "violence"), 
+                         bls.data.cause.percent, bls.data.cause.n,bls.data.cause.ypos, bls.data.cause.source)
+names(bls.data.cause) <- c("BLS.category", "fraction", "n", "ypos","source")
+
+# Make gender pies 
+
+## Make a pie chart of deaths by gender. 
+#NPS data first 
+colors <- c("male" = 'darkseagreen1', "undetermined" = 'darkseagreen3', 'female' = 'darkseagreen4')
+
+#calculate position of labels for pie chart
+nps.data.sex$ypos = c(35, 90, 99) #manually hard-coded for best positions
+
+#make pie chart
+NPS_sex <- ggplot(nps.data.sex, aes(x="", y=fraction, fill=sex)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = sex), color = "white", size=4)+
+  ggtitle('Sex and death')
+
+plot(NPS_sex)
+
+# BLS data next
+colors <- c("man" = 'darkseagreen1', 'woman' = 'darkseagreen4')
+
+#calculate position of labels for pie chart
+bls.data.gender$ypos = c(5, 55) #manually hard-coded for best positions
+
+#make pie chart
+BLS_gender <- ggplot(bls.data.gender, aes(x="", y=fraction, fill=gender)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = gender), color = "white", size=4)+
+  ggtitle('Gender and death')
+
+plot(BLS_gender)
+
+# Now plot causes 
+
+# NPS first 
+colors <- c("intentional" = 'lightsteelblue4', "unintentional" = 'lightsteelblue1', "medical" = 'lightsteelblue2', "undetermined" = "gray50")
+
+nps.data.cause$ypos = c(25, 75, 90, 55) #manually hard-coded for best positions
+
+#make pie chart
+NPS_cause <- ggplot(nps.data.cause, aes(x="", y=fraction, fill=cause)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = cause), color = "white", size=4)+
+  ggtitle('NPS death')
+
+plot(NPS_cause)
+
+# Now BLS causes 
+colors <- c("transportation" = 'gray90', 
+            'violence' = 'gray70',
+            'contact' = 'gray5',
+            'exposure' = 'gray40',
+            'falls' = 'gray60',
+            'explosions' ='gray15')
+
+#make pie chart
+BLS_cause <- ggplot(bls.data.cause, aes(x="", y=fraction, fill=BLS.category)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = BLS.category), color = "white", size=4)+
+  ggtitle('BLS data')
+
+plot(BLS_cause)
+
+
+# Now do the geology data with BLS categories 
+
+death.bls.analysis <- subset(Db.clean, BLS.category != "NA")
+
+colors <- c("transportation" = 'gray90', 
+            'violence' = 'gray70',
+            'contact' = 'gray5',
+            'exposure' = 'gray40',
+            'falls' = 'gray60',
+            'explosions' ='gray15')
+
+death.bls.analysis <- death.bls.analysis  %>% 
+  group_by(BLS.category) %>% 
+  count()
+
+#calculate position of labels for pie chart
+death.bls.analysis  <- death.bls.analysis  %>%
+  arrange(desc(n)) %>%
+  mutate(prop = n / sum(death.bls.analysis$n) *100) %>%
+  mutate(ypos = cumsum(prop)- 0.5*prop )
+
+death.bls.analysis$ypos = c(40, 10, 85, 75, 95) #manually hard-coded for best positions
+death.bls.analysis$source = c('this.database','this.database','this.database','this.database','this.database')
+#make pie chart
+
+BLS_geology_pie <- ggplot(death.bls.analysis, aes(x="", y=prop, fill=BLS.category)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values=colors) +
+  coord_polar("y", start=0)+
+  theme_void()+
+  theme(legend.position="none",
+        plot.title = element_text(size = 6),
+        panel.background = element_blank()) +
+  geom_text(aes(y = ypos, label = BLS.category), color = "white", size=4)+
+  ggtitle('Geologist data, BLS categories')
+
+plot(BLS_geology_pie)
+
+
+Other_data_pies <- grid.arrange(
+  grobs = list(NPS_sex, NPS_cause, BLS_gender, BLS_cause, BLS_geology_pie),
+  widths = c(1),
+  heights = c(1,1,1,1,1),
+  layout_matrix = rbind(c(1),
+                        c(2),
+                        c(3),
+                        c(4),
+                        c(5)))
+
+ggsave("Other_Pies_plot.pdf", Other_data_pies, width = 5,  units = "in")
+
+
+```
+```{r Statistical test}
+
+bls.cause.comp <- full_join(bls.data.cause, death.bls.analysis) 
+
+bls.cause.results <- aov(n ~ BLS.category + source, data = bls.cause.comp)
+summary(bls.cause.results)
+
+nps.cause.comp <- full_join(nps.data.cause, death.intentional) 
+
+nps.cause.results <- aov(n ~ cause + source, data = nps.cause.comp)
+summary(nps.cause.results)
+
+# https://www.scribbr.com/statistics/two-way-anova/
+# http://www.sthda.com/english/wiki/two-proportions-z-test-in-r
+```
