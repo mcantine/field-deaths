@@ -6,7 +6,7 @@ output:
 ---
 ```{r Welcome}
 
-# Code written in R Markdown by Marjorie Cantine to analyze data about deaths during geological fieldwork (last updated 8 September 2021)
+# Code written in R Markdown by Marjorie Cantine to analyze data about deaths during geological fieldwork (last updated 9 September 2021)
 # Code input is the database Excel file (FieldDeaths_DATE.xls); output is several ggplot-generated graphs, saved as PDFs. The input needs to be in the same directory as this code; that is where the graphs will be saved, too. 
 # Code also generates a number of summary tables, which don't produce outputs but can be queried individually. These are listed in Chunk 5: Geologist Death Subsetting 
 # To run this code, either press Knit to generate a single PDF with all figures, or Run > Restart R and Run all Chunks to generate individual PDFs 
@@ -52,7 +52,7 @@ names(Db) <- c("number", "name", "gender", "field", "stage.or.age", "sector", "s
 # Subset the database so that it only includes deaths that occurred during doing Earth science (earth.science == "Yes") and deaths that occurred "in the field" and not at a mine or construction site (in.the.field == "Yes")
 Db.clean <- subset(Db, Db$earth.science == "Yes" & Db$in.the.field == "Yes")
 
-#Ok. Database is ready to be analyzed 
+#Ok. Database is ready to be analyzed.
     
 ```
 ```{r Fig1 Pie charts, echo = FALSE}
@@ -66,17 +66,19 @@ colors <- c("intentional" = 'lightsteelblue4', "unintentional" = 'lightsteelblue
 #Use dplyr functions to summarize number of deaths by cause and calculate proportions
 death.category <- Db.clean %>% 
   group_by(category) %>% 
-  count()   %>%
+  count()   
+  
+death.category <- death.category %>%   
   mutate(prop = n / sum(death.category$n) *100)  
 
 #add data source (this will be useful once we start comparing this data to other datasets)
-death.intentional$source = c("this.database","this.database","this.database") 
+death.category$source = c("this.database","this.database","this.database") 
 
 #give columns short descriptive names
-names(death.intentional) <- c("cause", "n", "prop",  "source")
+names(death.category) <- c("cause", "n", "prop",  "source")
 
 #make pie chart
-Pie_intentional <- ggplot(death.intentional, aes(x="", y=prop, fill=cause)) +
+Pie_category <- ggplot(death.category, aes(x="", y=prop, fill=cause)) +
   geom_bar(stat="identity", width=1) +
   scale_fill_manual(values=colors) +
   coord_polar("y", start=0)+
@@ -85,7 +87,7 @@ Pie_intentional <- ggplot(death.intentional, aes(x="", y=prop, fill=cause)) +
         panel.background = element_blank()) +
   ggtitle('Intentional death')
 
-plot(Pie_intentional)
+plot(Pie_category)
 
 
 ## Make a pie chart of deaths by gender. 
@@ -97,7 +99,9 @@ colors <- c("M" = 'darkseagreen1', "X" = 'darkseagreen3', 'F' = 'darkseagreen4')
 death.gender <- Db.clean %>% 
   group_by(gender) %>% 
   count() %>%
-  arrange(desc(gender)) %>%
+  arrange(desc(gender)) 
+
+death.gender <- death.gender %>%
   mutate(prop = n / sum(death.gender$n) *100) 
 
 #add source information
@@ -133,7 +137,9 @@ colors <- c("Academia" = 'gray10', "Private" = 'gray32', 'Government' = 'gray73'
 death.sector <- Db.clean %>% 
   group_by(sector.coded) %>% 
   count() %>%
-  arrange(desc(sector.coded)) %>%
+  arrange(desc(sector.coded))
+
+death.sector <- death.sector %>%
   mutate(prop = n / sum(death.sector$n) *100) 
 
 #make pie chart
@@ -151,7 +157,7 @@ plot(Pie_sector)
 
 #arrange these three plots into one unit and output it as a PDF 
 Geologist_pies_plot <- grid.arrange(
-  grobs = list(Pie_intentional, Pie_gender, Pie_sector),
+  grobs = list(Pie_category, Pie_gender, Pie_sector),
   widths = c(1),
   heights = c(1,1,1),
   layout_matrix = rbind(c(1),
@@ -164,16 +170,16 @@ ggsave("Geologist_pies_plot.pdf", Geologist_pies_plot)
 
 ```{r Geologist death subsetting}
 
-#These summary tables don't output charts, but they calculate various proportions. 
+#These summary tables don't output charts, but they produce various summary tables that can be examined in R. 
 
 # look at intentional death death by sector and gender 
-Db.intentional <- subset(Db.clean, category == "intentional")
+Db.category <- subset(Db.clean, category == "intentional")
 
-death.intentional.sector <- Db.intentional %>% 
+death.category.sector <- Db.category %>% 
   group_by(sector.coded) %>% 
   count()
 
-death.intentional.gender <- Db.intentional %>% 
+death.category.gender <- Db.category %>% 
   group_by(gender) %>% 
   count()
 
@@ -202,7 +208,7 @@ death.government.gender <- Db.clean.government %>%
 #Goal is to make a figure that summarizes the causes of unintentional death
 
 # Find all unintentional deaths 
-Db.unintentional <- subset(Db.clean, intentional == "unintentional")
+Db.unintentional <- subset(Db.clean, category == "unintentional")
 
 #summary table of causes
 death.unintentional <- Db.unintentional %>% 
@@ -400,6 +406,7 @@ ggsave("BLS_geology_pie.pdf", BLS_geology_pie, width = 2, height = 2, units = "i
 
 
 ```
+
 ```{r ANOVA test}
 
 #Compile BLS and geologist data together
@@ -410,8 +417,11 @@ bls.cause.results <- aov(n ~ BLS.category + source, data = bls.cause.comp)
 summary(bls.cause.results)
 
 #Compile NPS and geologist data
-nps.cause.comp <- full_join(nps.data.cause, death.intentional) 
+nps.cause.comp <- full_join(nps.data.cause, death.category) 
 
 #Run ANOVA
 nps.cause.results <- aov(n ~ cause + source, data = nps.cause.comp)
 summary(nps.cause.results)
+
+
+```
